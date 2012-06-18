@@ -117,24 +117,19 @@ module Piston
       #   {"vendor/rails" => {:revision => :head, :url => "http://dev.rubyonrails.org/svn/rails/trunk"},
       #    "vendor/plugins/will_paginate" => {:revision => 1234, :url => "http://will_paginate.org/svn/trunk"}}
       def externals
-        externals = svn(:proplist, "--recursive", "--verbose")
+        externals = svn(:propget, "--recursive", "--verbose", "svn:externals")
         return Hash.new if externals.blank?
         returning(Hash.new) do |result|
+          externals.gsub!(/^(Properties on.*)/, '\1 |')
           YAML.load(externals).each_pair do |dir, props|
-            next if props["svn:externals"].blank?
             next unless dir =~ /Properties on '([^']+)'/
             basedir = self.path + $1
-            exts = props["svn:externals"]
-            exts.split("\n").each do |external|
-              data = external.match(/^([^\s]+)\s+(?:(?:-r|--revision)\s*(\d+)\s+)?(.+)$/)
-              case data.length
-              when 4
-                subdir, rev, url = data[1], data[2].nil? ? :head : data[2].to_i, data[3]
-              else
-                raise SyntaxError, "Could not parse svn:externals on #{basedir}: #{external}"
-              end
+            props.split("\n").each do |external|
+              next if external =~ /svn:externals/
+              data = external.match /^\s+(\S+)\s(\S+)/
+              subdir, url = data[1], data[2]
 
-              result[basedir + subdir] = {:revision => rev, :url => url}
+              result[basedir + subdir] = {:revision => :head, :url => url}
             end
           end
         end
